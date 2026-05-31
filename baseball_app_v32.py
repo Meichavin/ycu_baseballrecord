@@ -23,7 +23,7 @@ ADMIN_PASSWORD = "ycu2026"
 DATA_FILE = "pitch_data.csv"
 PITCHER_FILE = "pitchers.csv" 
 
-st.set_page_config(page_title="ycu野球投球分析 Ver3.2", layout="wide")
+st.set_page_config(page_title="ycu野球投球分析 Ver3.3", layout="wide")
 
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
@@ -70,7 +70,7 @@ for k, v in init_states.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-st.title("ycu野球投球分析 Ver3.2")
+st.title("ycu野球投球分析 Ver3.3")
 
 tab_in, tab_s, tab_h, tab_m, tab_set = st.tabs(
     ["入力", "ストライク率", "被打率", "投手指標", "設定"]
@@ -100,7 +100,7 @@ with tab_in:
         st.session_state.selected_event = ""
         st.session_state.prev_mode = mode
         st.session_state.prev_batter = batter
-        st.toast("🔄 モード/打者が変更されたため、カウントを0-0にリセットしました。")
+        st.toast("モード/打者が変更されたため、カウントを0-0にリセットしました。")
         st.rerun()
 
     st.markdown(f"### 現在のカウント: ボール **{st.session_state.balls}** - ストライク **{st.session_state.strikes}**")
@@ -131,7 +131,7 @@ with tab_in:
         for idx, ev in enumerate(event_list):
             with ev_cols[idx % 4]:
                 is_ev_sel = (st.session_state.selected_event == ev)
-                if st.button(f"{'🎯 ' if is_ev_sel else ''}{ev}", key=f"ev_{ev}", type="primary" if is_ev_sel else "secondary", use_container_width=True):
+                if st.button(f"{'' if is_ev_sel else ''}{ev}", key=f"ev_{ev}", type="primary" if is_ev_sel else "secondary", use_container_width=True):
                     st.session_state.selected_event = ev
                     
                     if mode == "ブルペン":
@@ -170,7 +170,7 @@ with tab_in:
         
         with col_direct:
             st.caption("【打席が継続する場合】")
-            if st.button("🔄 カウントを進めて次へ", type="primary", use_container_width=True):
+            if st.button("カウントを進めて次へ", type="primary", use_container_width=True):
                 row = {
                     "日時": datetime.now(), "投手名": current_pitcher, "モード": "試合", "打者左右": batter,
                     "球種": p, "イベント": ev, "ボール": b_next, "ストライク": s_next,
@@ -194,7 +194,7 @@ with tab_in:
             pa_cols = st.columns(3)
             for idx, pa in enumerate(pa_list):
                 with pa_cols[idx % 3]:
-                    if st.button(f"💥 {pa}", key=f"pa_{pa}", use_container_width=True):
+                    if st.button(f"{pa}", key=f"pa_{pa}", use_container_width=True):
                         row = {
                             "日時": datetime.now(), "投手名": current_pitcher, "モード": "試合", "打者左右": batter,
                             "球種": p, "イベント": ev, 
@@ -222,7 +222,7 @@ with tab_in:
             st.rerun()
     else:
         if not st.session_state.selected_pitch:
-            st.info("💡 上のボタンから球種を選択すると、次の入力に進みます。")
+            st.info("上のボタンから球種を選択すると、次の入力に進みます。")
 
 # ==========================================
 # 【ストライク率タブ】
@@ -230,8 +230,20 @@ with tab_in:
 with tab_s:
     st.subheader("投手別ストライク率分析")
     filter_pitcher = st.selectbox("分析対象の投手を選択", ["全員"] + pitcher_list, key="sb_s")
-    
+    mode_filter = st.radio(
+        "データ種別",
+        ["全て", "試合のみ", "ブルペンのみ"],
+        index=1,
+        horizontal=True
+    )
+
     active_df = df if filter_pitcher == "全員" else df[df["投手名"] == filter_pitcher]
+
+    if mode_filter == "試合のみ":
+        active_df = active_df[active_df["モード"] == "試合"]
+
+    elif mode_filter == "ブルペンのみ":
+        active_df = active_df[active_df["モード"] == "ブルペン"]
     pitch_df = active_df[active_df["イベント"].isin(["ストライク", "ボール", "ファウル", "空振り"])].copy()
 
     if len(pitch_df):
@@ -297,8 +309,21 @@ with tab_h:
 with tab_m:
     st.subheader("投手別詳細指標")
     filter_pitcher_m = st.selectbox("分析対象の投手を選択", ["全員"] + pitcher_list, key="sb_m")
-    
+    mode_filter_m = st.radio(
+        "データ種別",
+        ["全て", "試合のみ", "ブルペンのみ"],
+        index=1,
+        horizontal=True,
+        key="mode_m"
+    )
+
     active_df = df if filter_pitcher_m == "全員" else df[df["投手名"] == filter_pitcher_m]
+
+    if mode_filter_m == "試合のみ":
+        active_df = active_df[active_df["モード"] == "試合"]
+
+    elif mode_filter_m == "ブルペンのみ":
+        active_df = active_df[active_df["モード"] == "ブルペン"]
     pa_df = active_df[active_df["打席結果"] != ""]
     
     if len(pa_df):
