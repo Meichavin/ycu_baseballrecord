@@ -1,4 +1,4 @@
-# baseball_app_v22.py
+# baseball_app_v32.py
 import streamlit as st
 import pandas as pd
 import os
@@ -6,8 +6,18 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 
-plt.rcParams['font.family'] = 'sans-serif'
-plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Liberation Sans', 'DejaVu Sans Condensed', 'Noto Sans CJK JP', 'TakaoPGothic', 'sans-serif']
+# --- 【修正】フォントの直接読み込み設定 ---
+FONT_PATH = "NotoSansJP-Regular.ttf"
+
+if os.path.exists(FONT_PATH):
+    # フォントファイルをmatplotlibに登録
+    fm.fontManager.addfont(FONT_PATH)
+    prop = fm.FontProperties(fname=FONT_PATH)
+    plt.rcParams['font.family'] = prop.get_name()
+else:
+    # 万が一ファイルがない場合のバックアップ
+    plt.rcParams['font.family'] = 'sans-serif'
+# -----------------------------------------
 
 # ---------------------------------------------------------
 # 【重要】セキュリティ設定（任意のパスワードを設定してください）
