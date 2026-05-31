@@ -6,7 +6,8 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 
-plt.rcParams['font.family'] = 'Meiryo'
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Liberation Sans', 'DejaVu Sans Condensed', 'Noto Sans CJK JP', 'TakaoPGothic', 'sans-serif']
 
 # ---------------------------------------------------------
 # 【重要】セキュリティ設定（任意のパスワードを設定してください）
