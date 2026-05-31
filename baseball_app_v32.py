@@ -69,7 +69,7 @@ for k, v in {"balls": 0, "strikes": 0, "last_pitch": ""}.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-st.title("⚾ 野球投球分析 Ver3.2 (投手別分析 & 認証機能)")
+st.title("ycu野球投球分析 Ver3.2")
 
 tab_in, tab_s, tab_h, tab_m, tab_set = st.tabs(
     ["入力", "ストライク率", "被打率", "投手指標", "設定"]
@@ -89,7 +89,7 @@ with tab_in:
         batter = st.radio("打者", ["右", "左"], horizontal=True) if mode == "試合" else "不明"
 
     # 現在のカウント表示
-    st.markdown(f"### 📢 現在のカウント: **{st.session_state.balls}** - **{st.session_state.strikes}**")
+    st.markdown(f"###現在のカウント: **{st.session_state.balls}** - **{st.session_state.strikes}**")
 
     # 初球フラグの事前判定
     is_first_pitch = (st.session_state.balls == 0 and st.session_state.strikes == 0)
@@ -97,7 +97,7 @@ with tab_in:
     # ---------------------------------------------------------
     # 【メイン】投球記録の1タップマトリックスUI
     # ---------------------------------------------------------
-    st.markdown("### 💡 1タップ投球記録")
+    st.markdown("###1タップ投球記録")
     st.caption("球種と結果が交わるボタンをタップすると、その場で即時記録されます。")
 
     pitch_choices = ["ストレート", "スライダー", "カーブ", "フォーク", "チェンジアップ", "カット"]
@@ -181,7 +181,7 @@ with tab_in:
                     st.rerun()
 
 with tab_s:
-    st.subheader("📊 投手別ストライク率分析")
+    st.subheader("投手別ストライク率分析")
     filter_pitcher = st.selectbox("分析対象の投手を選択", ["全員"] + pitcher_list, key="sb_s")
     
     # 投手フィルターの適用
@@ -215,7 +215,7 @@ with tab_s:
         st.info("データがありません。")
 
 with tab_h:
-    st.subheader("🎯 投手別被打率分析")
+    st.subheader("投手別被打率分析")
     filter_pitcher_h = st.selectbox("分析対象の投手を選択", ["全員"] + pitcher_list, key="sb_h")
     
     active_df = df if filter_pitcher_h == "全員" else df[df["投手名"] == filter_pitcher_h]
@@ -243,7 +243,7 @@ with tab_h:
         st.info("データがありません。")
 
 with tab_m:
-    st.subheader("📈 投手別詳細指標")
+    st.subheader("投手別詳細指標")
     filter_pitcher_m = st.selectbox("分析対象の投手を選択", ["全員"] + pitcher_list, key="sb_m")
     
     active_df = df if filter_pitcher_m == "全員" else df[df["投手名"] == filter_pitcher_m]
@@ -305,7 +305,7 @@ with tab_m:
         st.pyplot(fig)
 
 with tab_set:
-    st.subheader("👤 投手マスタ管理")
+    st.subheader("投手登録")
     new_pitcher = st.text_input("新しい投手の名前を入力してください")
     if st.button("投手を新規登録"):
         if new_pitcher:
