@@ -6,11 +6,10 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 
-# --- 【修正】フォントの直接読み込み設定 ---
+# --- フォントの直接読み込み設定 ---
 FONT_PATH = "NotoSansJP-Regular.ttf"
 
 if os.path.exists(FONT_PATH):
-    # フォントファイルをmatplotlibに登録
     fm.fontManager.addfont(FONT_PATH)
     prop = fm.FontProperties(fname=FONT_PATH)
     plt.rcParams['font.family'] = prop.get_name()
@@ -19,21 +18,16 @@ else:
     plt.rcParams['font.family'] = 'sans-serif'
 # -----------------------------------------
 
-# ---------------------------------------------------------
-# 【重要】セキュリティ設定（任意のパスワードを設定してください）
-# ---------------------------------------------------------
 ADMIN_PASSWORD = "ycu2026" 
 
 DATA_FILE = "pitch_data.csv"
-PITCHER_FILE = "pitchers.csv" # 投手一覧を保存するファイル
+PITCHER_FILE = "pitchers.csv" 
 
 st.set_page_config(page_title="ycu野球投球分析 Ver3.2", layout="wide")
 
-# パスワード認証用のセッション状態初期化
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
-# --- パスワードログイン画面 ---
 if not st.session_state.authenticated:
     st.title("🔒 ログイン管理画面")
     pwd_input = st.text_input("認証パスワードを入力してください", type="password")
@@ -44,9 +38,8 @@ if not st.session_state.authenticated:
             st.rerun()
         else:
             st.error("パスワードが正しくありません。")
-    st.stop() # 認証されるまでこれ以降のコードを実行しない
+    st.stop() 
 
-# --- 認証後のメインアプリ処理 ---
 cols = ["日時", "投手名", "モード", "打者左右", "球種", "イベント", "ボール", "ストライク",
         "カウント", "打席結果", "決め球", "最終カウント", "初球"]
 
@@ -58,14 +51,22 @@ if os.path.exists(DATA_FILE):
 else:
     df = pd.DataFrame(columns=cols)
 
-# 投手リストの読み込み
 if os.path.exists(PITCHER_FILE):
     pitcher_df = pd.read_csv(PITCHER_FILE)
     pitcher_list = pitcher_df["投手名"].tolist()
 else:
     pitcher_list = ["未登録"]
 
-for k, v in {"balls": 0, "strikes": 0, "last_pitch": ""}.items():
+# --- セッション状態の初期化 ---
+init_states = {
+    "balls": 0, 
+    "strikes": 0, 
+    "selected_pitch": "", 
+    "selected_event": "",
+    "prev_mode": "ブルペン",    
+    "prev_batter": "右"        
+}
+for k, v in init_states.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -75,11 +76,14 @@ tab_in, tab_s, tab_h, tab_m, tab_set = st.tabs(
     ["入力", "ストライク率", "被打率", "投手指標", "設定"]
 )
 
+# ==========================================
+# 【入力タブ】
+# ==========================================
 with tab_in:
     if pitcher_list == ["未登録"]:
-        st.warning("⚠️ 投手が登録されていません。「設定」タブから投手を登録してください。")
+        st.warning("⚠️ 投手が登録されていません。「設定」タブから投力を登録してください。")
     
-    # 基本設定エリア（コンパクトに横並び）
+    # 基本設定エリア
     c_mode1, c_mode2, c_mode3 = st.columns(3)
     with c_mode1:
         current_pitcher = st.selectbox("投球中の投手", pitcher_list)
@@ -88,103 +92,145 @@ with tab_in:
     with c_mode3:
         batter = st.radio("打者", ["右", "左"], horizontal=True) if mode == "試合" else "不明"
 
-    # 現在のカウント表示
-    st.markdown(f"現在のカウント: ボール **{st.session_state.balls}** - ストライク **{st.session_state.strikes}**")
+    # モードまたは打者の変更時にカウントを自動リセット
+    if st.session_state.prev_mode != mode or (mode == "試合" and st.session_state.prev_batter != batter):
+        st.session_state.balls = 0
+        st.session_state.strikes = 0
+        st.session_state.selected_pitch = ""
+        st.session_state.selected_event = ""
+        st.session_state.prev_mode = mode
+        st.session_state.prev_batter = batter
+        st.toast("🔄 モード/打者が変更されたため、カウントを0-0にリセットしました。")
+        st.rerun()
 
-    # 初球フラグの事前判定
+    st.markdown(f"### 現在のカウント: ボール **{st.session_state.balls}** - ストライク **{st.session_state.strikes}**")
     is_first_pitch = (st.session_state.balls == 0 and st.session_state.strikes == 0)
 
-    # ---------------------------------------------------------
-    # 【メイン】投球記録の1タップマトリックスUI
-    # ---------------------------------------------------------
-    st.markdown("1タップ投球記録")
-    st.caption("球種と結果が交わるボタンをタップすると、その場で即時記録されます。")
-
-    pitch_choices = ["ストレート", "スライダー", "カーブ", "フォーク", "チェンジアップ", "カット","シュート","シンカー"]
+    st.write("---")
+    
+    pitch_choices = ["ストレート", "スライダー", "カーブ", "フォーク", "チェンジアップ", "カット", "シュート", "シンカー"]
     event_list = ["ストライク", "ボール", "ファウル", "空振り"]
+    pa_list = ["アウト", "三振", "四球", "死球", "単打", "二塁打", "三塁打", "本塁打", "失策"]
 
-    # グリッドのヘッダーを作成
-    cols_grid = st.columns([1.5, 2, 2, 2, 2])
-    with cols_grid[0]:
-        st.write("**球種**")
-    for i, ev in enumerate(event_list):
-        with cols_grid[i+1]:
-            st.markdown(f"**{ev}**")
+    disable_buttons = (pitcher_list == ["未登録"])
 
-    # 各球種ごとの行を生成
-    for p in pitch_choices:
-        cols_grid = st.columns([1.5, 2, 2, 2, 2])
-        with cols_grid[0]:
-            st.markdown(f"**{p}**")
+    # STEP 1: 球種の選択
+    st.markdown("**1. 球種を選択**")
+    pitch_cols = st.columns(4)
+    for idx, p in enumerate(pitch_choices):
+        with pitch_cols[idx % 4]:
+            is_p_sel = (st.session_state.selected_pitch == p)
+            if st.button(f"{'🟢 ' if is_p_sel else ''}{p}", key=f"pitch_{p}", type="primary" if is_p_sel else "secondary", use_container_width=True, disabled=disable_buttons):
+                st.session_state.selected_pitch = p
+                st.rerun()
+
+    # STEP 2: 投球結果の選択
+    if st.session_state.selected_pitch:
+        st.markdown(f"**2. 「{st.session_state.selected_pitch}」の投球結果を選択**")
+        ev_cols = st.columns(4)
+        for idx, ev in enumerate(event_list):
+            with ev_cols[idx % 4]:
+                is_ev_sel = (st.session_state.selected_event == ev)
+                if st.button(f"{'🎯 ' if is_ev_sel else ''}{ev}", key=f"ev_{ev}", type="primary" if is_ev_sel else "secondary", use_container_width=True):
+                    st.session_state.selected_event = ev
+                    
+                    if mode == "ブルペン":
+                        b, s = st.session_state.balls, st.session_state.strikes
+                        if ev == "ボール": b += 1
+                        elif ev in ["ストライク", "ファウル", "空振り"]:
+                            if ev != "ファウル" or s < 2: s += 1
+                        
+                        row = {
+                            "日時": datetime.now(), "投手名": current_pitcher, "モード": mode, "打者左右": batter,
+                            "球種": st.session_state.selected_pitch, "イベント": ev, "ボール": b, "ストライク": s, "カウント": f"{b}-{s}",
+                            "打席結果": "", "決め球": "", "最終カウント": "", "初球": is_first_pitch
+                        }
+                        df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+                        if b >= 4: b, s = 0, 0
+                        st.session_state.balls, st.session_state.strikes = b, s
+                        st.session_state.selected_pitch = ""
+                        st.session_state.selected_event = ""
+                        df.to_csv(DATA_FILE, index=False)
+                        st.rerun()
+                    else:
+                        st.rerun()
+
+    # STEP 3: 打席結果の選択（試合モードのみ）
+    if st.session_state.selected_pitch and st.session_state.selected_event:
+        p = st.session_state.selected_pitch
+        ev = st.session_state.selected_event
         
-        for i, ev in enumerate(event_list):
-            with cols_grid[i+1]:
-                if st.button(f"{ev}", key=f"btn_{p}_{ev}", use_container_width=True, disabled=(pitcher_list == ["未登録"])):
-                    b, s = st.session_state.balls, st.session_state.strikes
-                    st.session_state.last_pitch = p
+        b_next, s_next = st.session_state.balls, st.session_state.strikes
+        if ev == "ボール": b_next += 1
+        elif ev in ["ストライク", "ファウル", "空振り"]:
+            if ev != "ファウル" or s_next < 2: s_next += 1
 
-                    # カウント処理
-                    if ev == "ボール":
-                        b += 1
-                    elif ev == "ファウル":
-                        if s < 2: s += 1
-                    else:  # ストライク、空振り
-                        if s < 2: s += 1
-
-                    row = {
-                        "日時": datetime.now(), "投手名": current_pitcher, "モード": mode, "打者左右": batter,
-                        "球種": p, "イベント": ev, "ボール": b, "ストライク": s,
-                        "カウント": f"{b}-{s}", "打席結果": "", "決め球": "", "最終カウント": "",
-                        "初球": is_first_pitch
-                    }
-
-                    df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
-
-                    if b >= 4:
-                        st.warning("四球でカウントリセット")
-                        b, s = 0, 0
-
-                    st.session_state.balls = b
-                    st.session_state.strikes = s
-                    df.to_csv(DATA_FILE, index=False)
-                    st.rerun()
-
-    # ---------------------------------------------------------
-    # 【試合モード限定】打席結果の1タップUI
-    # ---------------------------------------------------------
-    if mode == "試合":
-        st.write("---")
-        st.markdown("### 打席結果保存")
+        st.markdown(f"**3. 打席の状況に応じて以下をタップ（即時保存）**")
+        col_direct, col_pa = st.columns([1, 2])
         
-        pa_list = ["アウト", "三振", "四球", "死球", "単打", "二塁打", "三塁打", "本塁打", "失策"]
-        
-        pa_cols = st.columns(3)
-        for idx, pa in enumerate(pa_list):
-            with pa_cols[idx % 3]:
-                if st.button(f"💥 {pa}", key=f"pa_{pa}", use_container_width=True, disabled=(pitcher_list == ["未登録"])):
-                    row = {
-                        "日時": datetime.now(), "投手名": current_pitcher, "モード": "試合", "打者左右": batter,
-                        "球種": "", "イベント": "打席終了",
-                        "ボール": st.session_state.balls,
-                        "ストライク": st.session_state.strikes,
-                        "カウント": "",
-                        "打席結果": pa,
-                        "決め球": st.session_state.last_pitch,
-                        "最終カウント": f"{st.session_state.balls}-{st.session_state.strikes}",
-                        "初球": is_first_pitch
-                    }
-                    df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
-                    st.session_state.balls = 0
-                    st.session_state.strikes = 0
-                    df.to_csv(DATA_FILE, index=False)
-                    st.success(f"{pa} を記録しました。カウントをリセットします。")
-                    st.rerun()
+        with col_direct:
+            st.caption("【打席が継続する場合】")
+            if st.button("🔄 カウントを進めて次へ", type="primary", use_container_width=True):
+                row = {
+                    "日時": datetime.now(), "投手名": current_pitcher, "モード": "試合", "打者左右": batter,
+                    "球種": p, "イベント": ev, "ボール": b_next, "ストライク": s_next,
+                    "カウント": f"{b_next}-{s_next}", "打席結果": "", "決め球": "", "最終カウント": "",
+                    "初球": is_first_pitch
+                }
+                df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+                
+                if b_next >= 4:
+                    st.warning("自動で四球リセットされました")
+                    b_next, s_next = 0, 0
+                    
+                st.session_state.balls, st.session_state.strikes = b_next, s_next
+                st.session_state.selected_pitch = ""
+                st.session_state.selected_event = ""
+                df.to_csv(DATA_FILE, index=False)
+                st.rerun()
+                
+        with col_pa:
+            st.caption("【この投球で打席が終了（決着）した場合】")
+            pa_cols = st.columns(3)
+            for idx, pa in enumerate(pa_list):
+                with pa_cols[idx % 3]:
+                    if st.button(f"💥 {pa}", key=f"pa_{pa}", use_container_width=True):
+                        row = {
+                            "日時": datetime.now(), "投手名": current_pitcher, "モード": "試合", "打者左右": batter,
+                            "球種": p, "イベント": ev, 
+                            "ボール": b_next, "ストライク": s_next,
+                            "カウント": f"{b_next}-{s_next}",
+                            "打席結果": pa,
+                            "決め球": p, 
+                            "最終カウント": f"{st.session_state.balls}-{st.session_state.strikes}",
+                            "初球": is_first_pitch
+                        }
+                        df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+                        
+                        st.session_state.balls = 0
+                        st.session_state.strikes = 0
+                        st.session_state.selected_pitch = ""
+                        st.session_state.selected_event = ""
+                        
+                        df.to_csv(DATA_FILE, index=False)
+                        st.success(f"{pa} を記録しました。")
+                        st.rerun()
+                        
+        if st.button("❌ 選択をやり直す", use_container_width=True):
+            st.session_state.selected_pitch = ""
+            st.session_state.selected_event = ""
+            st.rerun()
+    else:
+        if not st.session_state.selected_pitch:
+            st.info("💡 上のボタンから球種を選択すると、次の入力に進みます。")
 
+# ==========================================
+# 【ストライク率タブ】
+# ==========================================
 with tab_s:
     st.subheader("投手別ストライク率分析")
     filter_pitcher = st.selectbox("分析対象の投手を選択", ["全員"] + pitcher_list, key="sb_s")
     
-    # 投手フィルターの適用
     active_df = df if filter_pitcher == "全員" else df[df["投手名"] == filter_pitcher]
     pitch_df = active_df[active_df["イベント"].isin(["ストライク", "ボール", "ファウル", "空振り"])].copy()
 
@@ -214,6 +260,9 @@ with tab_s:
     else:
         st.info("データがありません。")
 
+# ==========================================
+# 【被打率タブ】
+# ==========================================
 with tab_h:
     st.subheader("投手別被打率分析")
     filter_pitcher_h = st.selectbox("分析対象の投手を選択", ["全員"] + pitcher_list, key="sb_h")
@@ -242,6 +291,9 @@ with tab_h:
     else:
         st.info("データがありません。")
 
+# ==========================================
+# 【投手指標タブ】
+# ==========================================
 with tab_m:
     st.subheader("投手別詳細指標")
     filter_pitcher_m = st.selectbox("分析対象の投手を選択", ["全員"] + pitcher_list, key="sb_m")
@@ -304,18 +356,19 @@ with tab_m:
         ax.pie(counts.values, labels=counts.index, autopct="%1.1f%%")
         st.pyplot(fig)
 
+# ==========================================
+# 【設定タブ】
+# ==========================================
 with tab_set:
     st.subheader("投手登録")
     new_pitcher = st.text_input("新しい投手の名前を入力してください")
     if st.button("投手を新規登録"):
         if new_pitcher:
-            # 既存のリストを更新
             if pitcher_list == ["未登録"]:
                 updated_list = [new_pitcher]
             else:
                 updated_list = pitcher_list + [new_pitcher]
             
-            # 重複排除して保存
             updated_list = list(set(updated_list))
             pd.DataFrame({"投手名": updated_list}).to_csv(PITCHER_FILE, index=False)
             st.success(f"「{new_pitcher}」投手を登録しました！")
