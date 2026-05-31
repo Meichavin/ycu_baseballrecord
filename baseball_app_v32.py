@@ -89,7 +89,7 @@ with tab_in:
         batter = st.radio("打者", ["右", "左"], horizontal=True) if mode == "試合" else "不明"
 
     # 現在のカウント表示
-    st.markdown(f"###　現在のカウント: B**{st.session_state.balls}** -S **{st.session_state.strikes}**")
+    st.markdown(f"現在のカウント: ボール **{st.session_state.balls}** - ストライク **{st.session_state.strikes}**")
 
     # 初球フラグの事前判定
     is_first_pitch = (st.session_state.balls == 0 and st.session_state.strikes == 0)
@@ -97,7 +97,7 @@ with tab_in:
     # ---------------------------------------------------------
     # 【メイン】投球記録の1タップマトリックスUI
     # ---------------------------------------------------------
-    st.markdown("###　1タップ投球記録")
+    st.markdown("1タップ投球記録")
     st.caption("球種と結果が交わるボタンをタップすると、その場で即時記録されます。")
 
     pitch_choices = ["ストレート", "スライダー", "カーブ", "フォーク", "チェンジアップ", "カット"]
